@@ -1,59 +1,90 @@
 -module(server).
--export([start/1,stop/1]).
+- export ( [ start / 1 , stop / 1 ] ) .
 
--record(server_state, {
-      name,
-      users,
-      channels
+-record(server_st, {
+    name,
+    clients,
+    channels
 }).
 
--record(channel_state, {
-      name,
-      users
+-record(channel_st, {
+    name,
+    clients
 }).
 
-% set intial state for the server
-initState(ServerName) ->
-  #server_state{name = ServerName, users = [], channels = [] } .
+initServer(ServerAtom) ->
+    #server_st{
+        name = ServerAtom,
+        clients = [],
+        channels = []
+    }.
+
+initChannel(ChannelAtom) ->
+    #channel_st{
+        name = ChannelAtom,
+        clients = []
+    }.
 
 % Start a new server process with the given name
+% Do not change the signature of this function.
 start(ServerAtom) ->
-    % - Spawn a new process which waits for a message, handles it, then loops infinitely
-    % - Register this process to ServerAtom
-    % - Return the process ID
-    genserver:start(ServerAtom, initState(ServerAtom), fun serverHandle/2) .
+    genserver:start(ServerAtom, initServer(ServerAtom), fun handleServer/2).
 
 % Stop the server process registered to the given name,
 % together with any other associated processes
 stop(ServerAtom) ->
     genserver:stop(ServerAtom).
 
-%% Server handle functions -----------------------------------------------------
+% handleServer -----------------------------------------------------------------
 
-serverHandle(State, {createchannel, Pid, Channel}) ->
-	% Just create new channel.
-  genserver:start(list_to_atom(Channel), initChannel(list_to_atom(Channel)), fun channelhandle/2),
-	NewState = State#server_state{channels = [ list_to_atom(Channel) | State#server_state.channels] }, %State#server_state.channels ++ [list_to_atom(Channel)]
-	io:format("The [servers] list of channels: ~p~n", [State#server_state.channels]),
-	{reply, ok, NewState};
+% Join a channel
+% if no channel exists --> create new one & join
+% if channel exists --> join
+handleServer(St, {join, Channel, PID}) ->
+  ChannelAtom = list_to_atom(Channel),
+  case whereis(ChannelAtom) of
+      undefined -> % channel do not exist --> create new one
+        genserver:start(ChannelAtom, initChannel(Channel), fun handleChannel/2);
+      _ -> % channel already exist
+        ok
+  end,
 
-%%
-%   - takes 2 params : state, request message
-%   - returns a tuple: new state, response message
-% need to have a function for each request type (join, leave ...)
-serverHandle(State, {join, UserPid}) ->
-  NewState = State#channel_state{users = [UserPid | State#channel_state.users] },
-  {reply, ok, NewState}.
+  case catch(genserver:request(ChannelAtom, {join, PID})) of
+      ok ->
+        case lists:member(Channel, St#server_st.channels) of
+          false ->
+            {reply, ok, St#server_st{
+              channels = [ Channel | St#server_st.channels ],
+              clients = [ PID | St#server_st.clients ]}};
+          _ -> {reply, ok, St}
+        end;
+      {'EXIT', "Timeout"} ->
+        {reply, {error, channel_not_reached, "Timeout"}, St}
+  end;
 
-%% Channel functions -----------------------------------------------------------
-initChannel(ChannelName) ->
-    #channel_state{
-          name = ChannelName,
-  				users = []
-  }.
+% Leave a channel
+handleServer(St, {leave, Channel, PID}) ->
+ not_implemented ;
 
-%% [Joining channel]
-% Add client to the list of clients who have joined the channel.
-channelhandle(State, {join, Pid}) ->
-      UpdatedState = State#channel_state{users = State#channel_state.users ++ [Pid] },
-      {reply, ok, UpdatedState}.
+% Send a message
+handleServer(St, {message_send, Msg, Channel, PID}) ->
+  not_implemented .
+
+% handleChannel ----------------------------------------------------------------
+handleChannel(St, {join, PID}) ->
+  % Check if user already is in channel
+  case lists:member(PID, St#channel_st.clients) of
+    false -> % add user
+      {reply, ok, St#channel_st{clients = [PID | St#channel_st.clients]}};
+     _ -> % user is already in channel
+      {reply, {error, user_already_joined}, St}
+  end;
+
+handleChannel(St, {leave, PID}) ->
+ not_implemented ;
+
+handleChannel(St, {message_send, Msg, PID}) ->
+  not_implemented .
+
+sendMsg([Client|Clients], Msg, Channel) ->
+  not_implemented .

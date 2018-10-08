@@ -7,7 +7,7 @@
     gui, % atom of the GUI process
     nick, % nick/username of the client
     server, % atom of the chat server
-    channels % existing channels on the server
+    channels % channels the user has joined
 }).
 
 % Return an initial state record. This is called from GUI.
@@ -20,61 +20,40 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
         channels = []
     }.
 
-addChannel(State, Channel) ->
-  NewState = State#client_st{channels = [ Channel | State#client_st.channels ]} .
+% handle -----------------------------------------------------------------------
 
-% TODO fix
-leaveChannel(State, Channel) ->
-  Update = lists:delete(Channel, State#client_st.channels ),
-  NewState = State#client_st{channels = Update} .
-
-
-isUserJoined(State, Channel) ->
-  lists:member(Channel, State#client_st.channels).
+% handle/2 handles each kind of request from GUI
+% Parameters:
+%   - the current state of the client (St)
+%   - request data from GUI
+% Must return a tuple {reply, Data, NewState}, where:
+%   - Data is what is sent to GUI, either the atom `ok` or a tuple {error, Atom, "Error message"}
+%   - NewState is the updated state of the client
 
 % Join channel
-% TODO REDO
-handle(State, {join, Channel}) ->
+handle(St, {join, Channel}) ->
+    case lists:member(Channel, St#client_st.channels) of
+      true -> % retrun with the message user_already_joined
+        {reply, {error, user_already_joined, "User is already joined in the channel"}, St};
+      _ -> % continue
+        ok
+    end,
 
-  case isUserJoined(State, list_to_atom(Channel)) of
-    % user is not in the channel
-    false ->
-    	case whereis(list_to_atom(Channel)) of
-        % need to create channel
-    	  undefined ->
-    		case catch genserver:request(State#client_st.server, {createchannel, self(), Channel}) of
-    		    ok -> % Request ok, createchannel operation succeeded. Then join channel.
-      			  genserver:request(list_to_atom(Channel), {join, self()}),
-      			  io:format("Now the client has joined an newly created channel. ~n"),
-      			  % Then, update the clients channel list (insert new channel).
-              NewState = addChannel(State, list_to_atom(Channel)),
-      			  {reply, ok, NewState};
-    		    {'EXIT', Reason} ->
-    			    {reply, {error, server_not_reached, "Something went wrong when trying to join, probably no connection to server.~n"}, State}
-    	  end;
-	    _ ->
-		  genserver:request(list_to_atom(Channel), {join, self()}),
-		  io:format("Now the client has joined an already existing channel. ~n"),
-      NewState = addChannel(State, list_to_atom(Channel)),
-		  {reply, ok, NewState}
+    % add user to server/channel
+    case catch(genserver:request(St#client_st.server, {join, Channel, self()})) of
+      ok ->
+        {reply, ok, St#client_st{channels = [Channel | St#client_st.channels]}};
+      {'EXIT',_} ->
+        {reply, {error, server_not_reached, "Server not reached"}, St}
     end;
-    true ->
-	io:format("The channel has already been joined. ~n"),
-	{reply, {error, user_already_joined, "Already joined~n"}, State}
-end;
-
 
 % Leave channel
 handle(St, {leave, Channel}) ->
-    % TODO: Implement this function
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "leave not implemented"}, St} ;
+  not_implemented ;
 
 % Sending message (from GUI, to channel)
 handle(St, {message_send, Channel, Msg}) ->
-    % TODO: Implement this function
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "message sending not implemented"}, St} ;
+  not_implemented ;
 
 % ---------------------------------------------------------------------------
 % The cases below do not need to be changed...
@@ -86,10 +65,11 @@ handle(St, whoami) ->
 
 % Change nick (no check, local only)
 handle(St, {nick, NewNick}) ->
-    {reply, ok, St#client_st{nick = NewNick}} ;
+      {reply, ok, St#client_st{nick = NewNick}} ;
 
 % Incoming message (from channel, to GUI)
 handle(St = #client_st{gui = GUI}, {message_receive, Channel, Nick, Msg}) ->
+    io:fwrite("Client dontchange Channel variable: ~p~n", [Channel]),
     gen_server:call(GUI, {message_receive, Channel, Nick++"> "++Msg}),
     {reply, ok, St} ;
 
@@ -100,4 +80,5 @@ handle(St, quit) ->
 
 % Catch-all for any unhandled requests
 handle(St, Data) ->
+    io:fwrite("Catchall: ~p~n", [Data]),
     {reply, {error, not_implemented, "Client does not handle this command"}, St} .
