@@ -77,7 +77,6 @@ handleServer(St, {leave, Channel, Pid}) ->
       _ ->
         {reply, {error, user_not_joined, "User was not joined from the beginning"}, St}
     end.
->>>>>>> Filips stuff
 
 
 % handleChannel ----------------------------------------------------------------

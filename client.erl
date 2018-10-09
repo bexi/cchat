@@ -65,7 +65,6 @@ handle(St, {leave, Channel}) ->
         {reply, {error, server_not_reached, "Server not reached"}, St};
       _ ->
         {reply, {error, user_not_joined, "User was not joined from the beginning"}, St}
->>>>>>> Filips stuff
     end;
 
 % Sending message (from GUI, to channel)
