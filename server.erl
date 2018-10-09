@@ -59,14 +59,23 @@ handleServer(St, {join, Channel, PID}) ->
               channels = [ ChannelAtom | St#server_st.channels ],
               clients = [ PID | St#server_st.clients ]}};
           _ -> {reply, ok, St}
+            % add user to server_state here too ?
         end;
       {'EXIT', _} ->
         {reply, {error, channel_not_reached, "Server not reached"}, St}
   end;
 
+
 % Leave a channel
-handleServer(St, {leave, Channel, PID}) ->
- not_implemented ;
+handleServer(St, {leave, Channel, Pid}) ->
+    case catch(genserver:request(list_to_atom(Channel), {leave, Pid})) of
+      ok ->
+        {reply, ok, St#server_st{clients = lists:delete(Pid, St#server_st.clients)}};
+      {'EXIT', _} ->
+        {reply, {error, channel_not_reached, "Server not reached"}, St};
+      _ ->
+        {reply, {error, user_not_joined, "User was not joined from the beginning"}, St}
+    end;
 
 % Send a message
 handleServer(St, {message_send, Msg, Channel, PID}) ->
@@ -82,8 +91,13 @@ handleChannel(St, {join, PID}) ->
       {reply, {error, user_already_joined}, St}
   end;
 
-handleChannel(St, {leave, PID}) ->
- not_implemented ;
+handleChannel(St, {leave, Pid}) ->
+    case lists:member(Pid, St#channel_st.clients) of
+      true -> % remove user
+        {reply, ok, St#channel_st{clients = lists:delete(Pid, St#channel_st.clients)}};
+      _ -> % user was not added from the beginning (do not remove)
+        {reply, {error, user_not_joined, "User was not joined from the beginning"}, St}
+    end;
 
 handleChannel(St, {message_send, Msg, PID}) ->
   not_implemented .

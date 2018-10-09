@@ -49,7 +49,18 @@ handle(St, {join, Channel}) ->
 
 % Leave channel
 handle(St, {leave, Channel}) ->
-  not_implemented ;
+    case lists:member(Channel, St#client_st.channels) of
+      false -> {reply, {error, user_not_joined, "Client not connected to channel"}, St};
+      _ -> ok
+    end,
+
+    Data = {leave, Channel, self()},
+    case catch(genserver:request(St#client_st.server, Data)) of
+      ok ->
+        {reply, ok, St#client_st{channels = St#client_st.channels  -- [Channel]}};
+      {'EXIT',_} ->
+        {reply, {error, server_not_reached, "Server not reached"}, St}
+    end;
 
 % Sending message (from GUI, to channel)
 handle(St, {message_send, Channel, Msg}) ->
