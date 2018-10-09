@@ -33,7 +33,7 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
 % Join channel
 handle(St, {join, Channel}) ->
     case lists:member(Channel, St#client_st.channels) of
-      true -> % retrun with the message user_already_joined
+      true -> % return with the message user_already_joined
         {reply, {error, user_already_joined, "User is already joined in the channel"}, St};
       _ -> % continue
         ok
@@ -43,8 +43,10 @@ handle(St, {join, Channel}) ->
     case catch(genserver:request(St#client_st.server, {join, Channel, self()})) of
       ok ->
         {reply, ok, St#client_st{channels = [Channel | St#client_st.channels]}};
-      {'EXIT',_} ->
-        {reply, {error, server_not_reached, "Server not reached"}, St}
+      {'EXIT', _} ->
+        {reply, {error, server_not_reached, "Server not reached"}, St};
+      _ ->
+        {reply, {error, user_already_joined, "user already joines channel"}, St}
     end;
 
 % Leave channel
@@ -58,13 +60,24 @@ handle(St, {leave, Channel}) ->
     case catch(genserver:request(St#client_st.server, Data)) of
       ok ->
         {reply, ok, St#client_st{channels = St#client_st.channels  -- [Channel]}};
-      {'EXIT',_} ->
-        {reply, {error, server_not_reached, "Server not reached"}, St}
+
+      {'EXIT', _} ->
+        {reply, {error, server_not_reached, "Server not reached"}, St};
+      _ ->
+        {reply, {error, user_not_joined, "User was not joined from the beginning"}, St}
+>>>>>>> Filips stuff
     end;
 
 % Sending message (from GUI, to channel)
 handle(St, {message_send, Channel, Msg}) ->
-  not_implemented ;
+  Response = (catch genserver:request(list_to_atom(Channel), {message_send, St#client_st.nick, Msg, self()})),
+
+  case Response of
+      {'EXIT', _} ->
+          {reply, {error, server_not_reached, "Channel does not respond"}, St};
+      message_send -> {reply, ok, St};
+      error -> {reply, {error, user_not_joined, "User has not joined that channel"}, St}
+  end;
 
 % ---------------------------------------------------------------------------
 % The cases below do not need to be changed...

@@ -71,15 +71,14 @@ handleServer(St, {leave, Channel, Pid}) ->
     case catch(genserver:request(list_to_atom(Channel), {leave, Pid})) of
       ok ->
         {reply, ok, St#server_st{clients = lists:delete(Pid, St#server_st.clients)}};
-      {'EXIT', _} ->
+
+      {'EXIT', "Timeout"} ->
         {reply, {error, channel_not_reached, "Server not reached"}, St};
       _ ->
         {reply, {error, user_not_joined, "User was not joined from the beginning"}, St}
-    end;
+    end.
+>>>>>>> Filips stuff
 
-% Send a message
-handleServer(St, {message_send, Msg, Channel, PID}) ->
-  not_implemented .
 
 % handleChannel ----------------------------------------------------------------
 handleChannel(St, {join, PID}) ->
@@ -87,7 +86,7 @@ handleChannel(St, {join, PID}) ->
   case lists:member(PID, St#channel_st.clients) of
     false -> % add user
       {reply, ok, St#channel_st{clients = [PID | St#channel_st.clients]}};
-     _ -> % user is already in channel
+     {'EXIT', _} -> % user is already in channel
       {reply, {error, user_already_joined}, St}
   end;
 
@@ -99,8 +98,20 @@ handleChannel(St, {leave, Pid}) ->
         {reply, {error, user_not_joined, "User was not joined from the beginning"}, St}
     end;
 
-handleChannel(St, {message_send, Msg, PID}) ->
-  not_implemented .
 
-sendMsg([Client|Clients], Msg, Channel) ->
-  not_implemented .
+handleChannel(St, {message_send, PID, Msg, Sender}) ->
+  IsMember = lists:member(Sender, St#channel_st.clients),
+      case IsMember of
+        true ->
+          spawn(
+            fun() ->
+              [ genserver:request(
+                  Receiver,
+                  {message_receive, St#channel_st.name, PID, Msg}
+                ) || Receiver <- St#channel_st.clients, Receiver =/= Sender]
+            end
+          ),
+          {reply, message_send, St};
+        false ->
+          {reply, error, St}
+      end.
