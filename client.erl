@@ -32,22 +32,22 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
 
 % Join channel
 handle(St, {join, Channel}) ->
-    case lists:member(Channel, St#client_st.channels) of
-      true -> % return with the message user_already_joined
-        {reply, {error, user_already_joined, "User is already joined in the channel"}, St};
-      _ -> % continue
-        ok
-    end,
+  case lists:member(Channel, St#client_st.channels) of
+    true -> % return with the message user_already_joined
+      {reply, {error, user_already_joined, "User is already joined in the channel"}, St};
+    _ -> % continue
+      ok
+  end,
 
-    % add user to server/channel
-    case catch(genserver:request(St#client_st.server, {join, Channel, self()})) of
-      ok ->
-        {reply, ok, St#client_st{channels = [Channel | St#client_st.channels]}};
-      {'EXIT', _} ->
-        {reply, {error, server_not_reached, "Server not reached"}, St};
-      _ ->
-        {reply, {error, user_already_joined, "user already joines channel"}, St}
-    end;
+  % add user to server/channel
+  case catch(genserver:request(St#client_st.server, {join, Channel, self()})) of
+    ok ->
+      {reply, ok, St#client_st{channels = [Channel | St#client_st.channels]}};
+    {'EXIT', _} ->
+      {reply, {error, server_not_reached, "Server not reached"}, St};
+    _ ->
+      {reply, {error, user_already_joined, "user already joines channel"}, St}
+  end;
 
 % Leave channel
 handle(St, {leave, Channel}) ->
@@ -60,7 +60,6 @@ handle(St, {leave, Channel}) ->
     case catch(genserver:request(St#client_st.server, Data)) of
       ok ->
         {reply, ok, St#client_st{channels = St#client_st.channels  -- [Channel]}};
-
       {'EXIT', _} ->
         {reply, {error, server_not_reached, "Server not reached"}, St};
       _ ->

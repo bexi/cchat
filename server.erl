@@ -42,36 +42,31 @@ stop(ServerAtom) ->
 % if channel exists --> join
 handleServer(St, {join, Channel, PID}) ->
   ChannelAtom = list_to_atom(Channel),
-  % check if channel process exists
   case whereis(ChannelAtom) of
-      undefined -> % channel do not exist --> create new one (new process)
-        genserver:start(ChannelAtom, initChannel(ChannelAtom), fun handleChannel/2);
+      undefined -> % channel do not exist --> create new one
+        genserver:start(ChannelAtom, initChannel(Channel), fun handleChannel/2);
       _ -> % channel already exist
         ok
   end,
-  % join channel (new or old)
+
   case catch(genserver:request(ChannelAtom, {join, PID})) of
       ok ->
-        case lists:member(ChannelAtom, St#server_st.channels) of
-          % this case might need/should be moved up to the creation of the new channel
-          false -> % if there was a new channel update the state with the new channel
+        case lists:member(Channel, St#server_st.channels) of
+          false ->
             {reply, ok, St#server_st{
-              channels = [ ChannelAtom | St#server_st.channels ],
+              channels = [ Channel | St#server_st.channels ],
               clients = [ PID | St#server_st.clients ]}};
           _ -> {reply, ok, St}
-            % add user to server_state here too ?
         end;
-      {'EXIT', _} ->
-        {reply, {error, channel_not_reached, "Server not reached"}, St}
+      {'EXIT', "Timeout"} ->
+        {reply, {error, channel_not_reached, "Timeout"}, St}
   end;
-
 
 % Leave a channel
 handleServer(St, {leave, Channel, Pid}) ->
     case catch(genserver:request(list_to_atom(Channel), {leave, Pid})) of
       ok ->
         {reply, ok, St#server_st{clients = lists:delete(Pid, St#server_st.clients)}};
-
       {'EXIT', "Timeout"} ->
         {reply, {error, channel_not_reached, "Server not reached"}, St};
       _ ->
@@ -96,7 +91,6 @@ handleChannel(St, {leave, Pid}) ->
       _ -> % user was not added from the beginning (do not remove)
         {reply, {error, user_not_joined, "User was not joined from the beginning"}, St}
     end;
-
 
 handleChannel(St, {message_send, PID, Msg, Sender}) ->
   IsMember = lists:member(Sender, St#channel_st.clients),
