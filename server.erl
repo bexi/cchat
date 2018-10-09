@@ -42,24 +42,26 @@ stop(ServerAtom) ->
 % if channel exists --> join
 handleServer(St, {join, Channel, PID}) ->
   ChannelAtom = list_to_atom(Channel),
+  % check if channel process exists
   case whereis(ChannelAtom) of
-      undefined -> % channel do not exist --> create new one
-        genserver:start(ChannelAtom, initChannel(Channel), fun handleChannel/2);
+      undefined -> % channel do not exist --> create new one (new process)
+        genserver:start(ChannelAtom, initChannel(ChannelAtom), fun handleChannel/2);
       _ -> % channel already exist
         ok
   end,
-
+  % join channel (new or old)
   case catch(genserver:request(ChannelAtom, {join, PID})) of
       ok ->
-        case lists:member(Channel, St#server_st.channels) of
-          false ->
+        case lists:member(ChannelAtom, St#server_st.channels) of
+          % this case might need/should be moved up to the creation of the new channel
+          false -> % if there was a new channel update the state with the new channel
             {reply, ok, St#server_st{
-              channels = [ Channel | St#server_st.channels ],
+              channels = [ ChannelAtom | St#server_st.channels ],
               clients = [ PID | St#server_st.clients ]}};
           _ -> {reply, ok, St}
         end;
-      {'EXIT', "Timeout"} ->
-        {reply, {error, channel_not_reached, "Timeout"}, St}
+      {'EXIT', _} ->
+        {reply, {error, channel_not_reached, "Server not reached"}, St}
   end;
 
 % Leave a channel
