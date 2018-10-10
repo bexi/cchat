@@ -53,13 +53,16 @@ handleServer(St, {join, Channel, PID}) ->
       ok ->
         case lists:member(Channel, St#server_st.channels) of
           false ->
+            %% look at this !
             {reply, ok, St#server_st{
               channels = [ Channel | St#server_st.channels ],
               clients = [ PID | St#server_st.clients ]}};
           _ -> {reply, ok, St}
         end;
       {'EXIT', "Timeout"} ->
-        {reply, {error, channel_not_reached, "Timeout"}, St}
+        {reply, {error, channel_not_reached, "Timeout"}, St};
+      _ ->
+        {reply, {error, user_already_joined, "Already joined?"}, St}
   end;
 
 % Leave a channel
