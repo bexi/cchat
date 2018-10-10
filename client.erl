@@ -32,6 +32,7 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
 
 % Join channel
 handle(St, {join, Channel}) ->
+  % check if the user is already joined in the channel
   case lists:member(Channel, St#client_st.channels) of
     true -> % return with the message user_already_joined
       {reply, {error, user_already_joined, "User is already joined in the channel"}, St};
@@ -46,19 +47,20 @@ handle(St, {join, Channel}) ->
     {'EXIT', _} ->
       {reply, {error, server_not_reached, "Server not reached"}, St};
     _ ->
-      {reply, {error, user_already_joined, "user already joines channel"}, St}
+      {reply, {error, user_already_joined, "User is already joined in the channel"}, St}
   end;
 
 % Leave channel
 handle(St, {leave, Channel}) ->
+    % check if user is even connected to the channel
     case lists:member(Channel, St#client_st.channels) of
       false -> {reply, {error, user_not_joined, "Client not connected to channel"}, St};
-      _ -> ok
+      _ -> ok % continue
     end,
 
-    Data = {leave, Channel, self()},
-    case catch(genserver:request(St#client_st.server, Data)) of
+    case catch(genserver:request(St#client_st.server, {leave, Channel, self()})) of
       ok ->
+        % send back state which had the channel removed
         {reply, ok, St#client_st{channels = St#client_st.channels  -- [Channel]}};
       {'EXIT', _} ->
         {reply, {error, server_not_reached, "Server not reached"}, St};
