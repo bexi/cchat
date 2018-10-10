@@ -75,6 +75,8 @@ handleServer(St, {leave, Channel, Pid}) ->
 
 
 % handleChannel ----------------------------------------------------------------
+
+% Join channel
 handleChannel(St, {join, PID}) ->
   % Check if user already is in channel
   case lists:member(PID, St#channel_st.clients) of
@@ -84,6 +86,7 @@ handleChannel(St, {join, PID}) ->
       {reply, {error, user_already_joined}, St}
   end;
 
+% Leave channel
 handleChannel(St, {leave, Pid}) ->
     case lists:member(Pid, St#channel_st.clients) of
       true -> % remove user
@@ -92,10 +95,14 @@ handleChannel(St, {leave, Pid}) ->
         {reply, {error, user_not_joined, "User was not joined from the beginning"}, St}
     end;
 
+% Method handling sending messages
+% Send error if sender is not in the channel
 handleChannel(St, {message_send, PID, Msg, Sender}) ->
+  % Check if user is in channel
   IsMember = lists:member(Sender, St#channel_st.clients),
       case IsMember of
         true ->
+          % Start new process to send the message
           spawn(
             fun() ->
               [ genserver:request(
