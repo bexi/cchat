@@ -51,14 +51,9 @@ handleServer(St, {join, Channel, PID}) ->
 
   case catch(genserver:request(ChannelAtom, {join, PID})) of
       ok ->
-        case lists:member(Channel, St#server_st.channels) of
-          false ->
-            %% look at this !
-            {reply, ok, St#server_st{
-              channels = [ Channel | St#server_st.channels ],
-              clients = [ PID | St#server_st.clients ]}};
-          _ -> {reply, ok, St}
-        end;
+        {reply, ok, St#server_st{
+          channels = [ Channel | St#server_st.channels ],
+          clients = [ PID | St#server_st.clients ]}};
       {'EXIT', "Timeout"} ->
         {reply, {error, channel_not_reached, "Timeout"}, St};
       _ ->
